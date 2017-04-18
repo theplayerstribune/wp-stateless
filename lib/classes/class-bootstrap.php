@@ -46,7 +46,7 @@ namespace wpCloud\StatelessMedia {
         $this->parse_feature_flags();
 
         // Invoke REST API
-        add_action( 'rest_api_init', array( $this, 'api_init' ) );
+        $this->api = new API();
 
         /**
          * Register SM metaboxes
@@ -66,7 +66,7 @@ namespace wpCloud\StatelessMedia {
         /**
          * Init AJAX jobs
          */
-        new Ajax();
+        $this->ajax = new Ajax();
 
         /**
          * Maybe Upgrade current Version
@@ -693,6 +693,49 @@ namespace wpCloud\StatelessMedia {
        *
        */
       public function activate() {
+        global $wpdb;
+
+        $table_name = $wpdb->prefix . "stateless_job";
+        $charset_collate = $wpdb->get_charset_collate();
+        /*
+
+          id                : Unique job id 
+          label             : Label to show on UI
+          type              : Image or non image attachment
+          status            : new, running, paused, finished, canceled
+          bulk_size         : Number of attachment to process at once.
+          payload           : Id of attachments.
+          synced_items      : Id of synced attachments.
+          failed_items      : Id of failed attachments
+          created_on        : Date time when job created.
+          updated_on        : Last update time
+          callback_secret   : Token to verify the request.
+          notifyOnFail      : Send mail to specified email address if job failed.
+          userID            : ID of user who created the job.
+
+        */
+
+        $sql = "CREATE TABLE `$table_name` (
+                  `id`              BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+                  `label`           VARCHAR(255) NOT NULL, 
+                  `type`            VARCHAR(50) NOT NULL,
+                  `status`          VARCHAR(50) NOT NULL,
+                  `bulk_size`       INT(10) DEFAULT 1,
+                  `payload`         LONGTEXT,
+                  `synced_items`    LONGTEXT,
+                  `failed_items`    LONGTEXT,
+                  `created_on`      datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+                  `updated_on`      datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+                  `callback_secret` varchar(50) NOT NULL,
+                  `notifyOnFail`    varchar(255),
+                  `userID`          BIGINT(20) UNSIGNED,
+                  PRIMARY KEY (`id`)
+                );
+              ";
+
+        require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
+        dbDelta( $sql );
+      
         add_action( 'activated_plugin', array($this, 'redirect_to_splash') );
         wp_redirect(admin_url('upload.php?page=stateless-setup-wizard&step=splash-screen'));
       }
