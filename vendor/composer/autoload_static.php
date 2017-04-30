@@ -42,6 +42,10 @@ class ComposerStaticInit969e7512e1d468631c8babea7e2601d2
         array (
             'Firebase\\JWT\\' => 13,
         ),
+        'C' => 
+        array (
+            'Composer\\Installers\\' => 20,
+        ),
     );
 
     public static $prefixDirsPsr4 = array (
@@ -89,6 +93,10 @@ class ComposerStaticInit969e7512e1d468631c8babea7e2601d2
         array (
             0 => __DIR__ . '/..' . '/firebase/php-jwt/src',
         ),
+        'Composer\\Installers\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/composer/installers/src/Composer/Installers',
+        ),
     );
 
     public static $prefixesPsr0 = array (
@@ -97,6 +105,13 @@ class ComposerStaticInit969e7512e1d468631c8babea7e2601d2
             'Google_' => 
             array (
                 0 => __DIR__ . '/..' . '/usabilitydynamics/google-api-php-client/src',
+            ),
+        ),
+        'C' => 
+        array (
+            'ChromePhp' => 
+            array (
+                0 => __DIR__ . '/..' . '/ccampbell/chromephp',
             ),
         ),
     );
@@ -3787,6 +3802,7 @@ class ComposerStaticInit969e7512e1d468631c8babea7e2601d2
         'UsabilityDynamics\\WP\\TGM_Plugin_Activation' => __DIR__ . '/..' . '/usabilitydynamics/lib-wp-bootstrap/lib/classes/class-tgm-plugin-activation.php',
         'UsabilityDynamics\\WP\\Utility' => __DIR__ . '/..' . '/usabilitydynamics/lib-wp-bootstrap/lib/classes/class-utility.php',
         'wpCloud\\StatelessMedia\\API' => __DIR__ . '/../..' . '/lib/classes/class-api.php',
+        'wpCloud\\StatelessMedia\\API_F' => __DIR__ . '/../..' . '/lib/classes/class-api-function.php',
         'wpCloud\\StatelessMedia\\Ajax' => __DIR__ . '/../..' . '/lib/classes/class-ajax.php',
         'wpCloud\\StatelessMedia\\Bootstrap' => __DIR__ . '/../..' . '/lib/classes/class-bootstrap.php',
         'wpCloud\\StatelessMedia\\GS_Client' => __DIR__ . '/../..' . '/lib/classes/class-gs-client.php',

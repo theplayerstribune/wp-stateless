@@ -3691,6 +3691,7 @@ return array(
     'UsabilityDynamics\\WP\\TGM_Plugin_Activation' => $vendorDir . '/usabilitydynamics/lib-wp-bootstrap/lib/classes/class-tgm-plugin-activation.php',
     'UsabilityDynamics\\WP\\Utility' => $vendorDir . '/usabilitydynamics/lib-wp-bootstrap/lib/classes/class-utility.php',
     'wpCloud\\StatelessMedia\\API' => $baseDir . '/lib/classes/class-api.php',
+    'wpCloud\\StatelessMedia\\API_F' => $baseDir . '/lib/classes/class-api-function.php',
     'wpCloud\\StatelessMedia\\Ajax' => $baseDir . '/lib/classes/class-ajax.php',
     'wpCloud\\StatelessMedia\\Bootstrap' => $baseDir . '/lib/classes/class-bootstrap.php',
     'wpCloud\\StatelessMedia\\GS_Client' => $baseDir . '/lib/classes/class-gs-client.php',

@@ -2,6 +2,7 @@
 /**
  * API Handler
  *
+ * @author alimuzzaman
  * @since 1.0.0
  */
 namespace wpCloud\StatelessMedia {
@@ -16,7 +17,7 @@ namespace wpCloud\StatelessMedia {
         $this->namespace = 'wp-stateless/v1';
         $this->table_name = $wpdb->prefix . "stateless_job";
 
-        // job handler service
+        // job handler service endpoint
         $this->job_handler_endpoint = 'http://api.usabilitydynamics.com/product/stateless/v1/';
 
         // Invoke REST API
@@ -34,16 +35,40 @@ namespace wpCloud\StatelessMedia {
        */
       public function api_init() {
 
+        /**
+         * Check current status of Stateless API.
+         * Whether it's accessible or not.
+         * 
+         * Request parameter: none
+         * 
+         * Response: 
+         *    ok: Whether API is up or not
+         *    message: Describe what is done or error message on error.
+         * 
+         */
         register_rest_route( $this->namespace, '/status', array(
           'methods' => 'GET',
           'callback' => array( $this, 'status' ),
         ) );
 
+        /**
+         *** Private ***
+         * Return list of job ids.
+         * 
+         * Request parameter: none
+         * 
+         * Response: 
+         *    ok: Whether request succeeded or not
+         *    message: Describe what is done or error message on error.
+         *    jobs: array of job ids
+         * 
+         */
         register_rest_route( $this->namespace, '/jobs', array(
           'methods' => 'GET',
           'callback' => array( $this, 'jobs' ),
         ) );
 
+        /*
         register_rest_route( $this->namespace, '/job/(?P<id>\d+)', array(
           'methods' => 'GET',
           'callback' => array( $this, 'get_job' ),
@@ -53,10 +78,22 @@ namespace wpCloud\StatelessMedia {
             }
           ),
         ) );
+        */
 
+        /**
+         * Synchronize attachment.
+         * 
+         * Request parameter:
+         *    id: job id
+         * 
+         * Response: 
+         *    ok: Whether attachment synced or not
+         *    message: Describe what is done or error message on error.
+         * 
+         */
         register_rest_route( $this->namespace, '/process_attachment/(?P<id>\d+)', array(
           'methods' => 'GET',
-          'callback' => array( $this, 'get_job' ),
+          'callback' => array( $this, 'process_attachment' ),
           'id' => array(
             'validate_callback' => function($param, $request, $key) {
               return is_numeric( $param );
@@ -64,21 +101,47 @@ namespace wpCloud\StatelessMedia {
           ),
         ) );
 
-        register_rest_route( $this->namespace, '/job/(?P<id>\d+)/step/(?P<step>\d+)', array(
+        /**
+         *** Private ***
+         * Start or stop a job.
+         * 
+         * Example query: /job/{id}/{step}
+         *                /job/5466/start
+         * 
+         * Request parameter:
+         *    id: job id
+         *    step: start, stop, pause, resume
+         * 
+         * Response: 
+         *    ok: Whether request succeeded or not
+         *    message: Describe what is done or error message on error.
+         * 
+         */
+        register_rest_route( $this->namespace, '/job/(?P<id>\d+)/(?P<step>\w+)', array(
           'methods' => 'GET',
-          'callback' => array( $this, 'start_job' ),
+          'callback' => array( $this, 'job_step' ),
           'id' => array(
-            'validate_callback' => function($param, $request, $key) {
-              return is_numeric( $param );
-            }
-          ),
-          'step' => array(
             'validate_callback' => function($param, $request, $key) {
               return is_numeric( $param );
             }
           ),
         ) );
 
+        /**
+         *** Private ***
+         * Create a new job and start it.
+         * 
+         * Example query: /job/create/
+         * 
+         * Request body:
+         *    bulk_size: The amount of attachment to process at a time.
+         * 
+         * Response: 
+         *    ok: Whether job started or not.
+         *    message: "Job started" on success.
+         *    response: Describe what is done or error message on error.
+         * 
+         */
         register_rest_route( $this->namespace, '/job/create/', array(
           'methods' => 'POST',
           'callback' => array( $this, 'create_job' ),
@@ -101,9 +164,9 @@ namespace wpCloud\StatelessMedia {
       }
 
       /**
-       * Jobs Endpoint.
+       * Jobs list Endpoint.
        *
-       * @return array
+       * @return array of job ids
        */
       public function jobs() {
         global $wpdb;
@@ -113,16 +176,15 @@ namespace wpCloud\StatelessMedia {
 
         $jobs = $wpdb->get_col($sql);
 
-        $jobs_url = array();
-        foreach ($jobs as $job) {
-          $jobs_url[] = $this->get_job_url($job['id']);
-          # code...
-        }
+        //$jobs_url = array();
+        //foreach ($jobs as $job) {
+        //  $jobs_url[] = $this->get_job_url($job['id']);
+        //}
 
         return array(
           "ok" => true,
           "message" => "Job endpoint up.",
-          "jobs" => $jobs_url,
+          "jobs" => $jobs,
         );
 
       }
@@ -154,17 +216,42 @@ namespace wpCloud\StatelessMedia {
       }
 
       /**
-       * Start a Job.
+       * Start, stop, pause, resume a Job.
        *
        * @return array
        */
-      public function start_job($data) {
-        $success = true;
-        $message = "Job started.";
-        $response = wp_remote_post( $this->job_handler_endpoint . 'job/start', array(
-              'body' => $this->get_job($data['id']),
-            )
-        );
+      public function job_step($data) {
+        $id       = $data['id'];
+        $success  = true;
+        $message  = null;
+        $response = null;
+
+        switch ($data['step']) {
+          case 'start':
+            $message = "Job started.";
+            $response = wp_remote_post( $this->job_handler_endpoint . 'job/start', array(
+                  'body' => $this->get_job($id),
+                )
+            );
+            break;
+          case 'pause':
+            $message = "Job paused.";
+            $response = wp_remote_get( $this->job_handler_endpoint . "job/$id/pause");
+            break;
+          case 'resume':
+            $message = "Job resumed.";
+            $response = wp_remote_get( $this->job_handler_endpoint . "job/$id/resume");
+            break;
+          case 'stop':
+            $message = "Job stoped.";
+            $response = wp_remote_get( $this->job_handler_endpoint . "job/$id/stop",);
+            break;
+          
+          default:
+            $success = false;
+            $message = "Unrecognized step.";
+            break;
+        }
 
         if ( is_wp_error( $response ) ) {
           $success = false;
@@ -175,66 +262,92 @@ namespace wpCloud\StatelessMedia {
         return array(
           "ok" => $success,
           "message" => $message,
-          "progress" => $response,
+          "response" => $response,
         );
 
       }
 
       /**
-       * Start a Job.
+       * Create a Job.
        *
-       * @return array
+       * @return response of job_step() method.
        */
       public function create_job($data) {
         global $wpdb;
+        $ajax       = ud_get_stateless_media()->ajax;
         $table      = $wpdb->prefix . "stateless_job";
         $bulk_size  = !empty($data['bulk_size'])?$data['bulk_size']:1;
-        $action     = !empty($data['action'])?$data['action']:'regenerate_images';
 
         $job = array(
             'label'           => 'Stateless Synchronization',
-            'type'            => $action,
+            'type'            => '', // maybe remove this column 
             'status'          => 'new',
             'bulk_size'       => $bulk_size,
             'payload'         => '',
             'synced_items'    => '',
             'failed_items'    => '',
-            'created_on'      => current_time( 'mysql' ),
-            'updated_on'      => current_time( 'mysql' ),
-            'callback_secret' => wp_generate_password( 12, true, true ),
+            'created_on'      => current_time( 'mysql' ), // do it in sql
+            'updated_on'      => current_time( 'mysql' ), // do it in sql
+            'callback_secret' => wp_generate_password( 20, true, true ),
           );
-        $ajax = ud_get_stateless_media()->ajax;
 
-        if($data['action'] == 'regenerate_images'){
-          $job['payload'] = $ajax->action_get_images_media_ids();
-        }
-        else if($data['action'] == 'sync_non_images'){
-          $job['payload'] = $ajax->action_get_other_media_ids();
-        }
+        $image_ids = $ajax->action_get_images_media_ids();
+        $other_ids = $ajax->action_get_other_media_ids();
+        $job['payload'] = array_merge($image_ids, $other_ids);
 
         $wpdb->insert( $table, $job );
 
-        $job = array('id' => $wpdb->insert_id) + $job;
+        $response = $this->job_step(array('step' => 'start', 'id' => $wpdb->insert_id));
 
-        return array(
-          "ok" => true,
-          "message" => "Job started.",
-          "job" => $job,
-        );
+        return $response;
 
       } // end create_job()
 
 
+      /**
+       * Process attachment sync request from UD product API.
+       *
+       * @return response of API_F::process_attachment() method.
+       *    ok: Whether attachment synced or not
+       *    message: Describe what is done or error message on error.
+       */
+      public function process_attachment($data){
+        // Both image and others.
+        return API_F::process_attachment($data['id']);
+      }
+
+      /**
+       * Return root API endpoint
+       *
+       * @param $route (Optional): If specified added with root url.
+       *
+       * @return API endpoint.
+       */
       public function get_root_url($route = ''){
         return rest_url($this->namespace . $route);
       }
 
+      /**
+       * Endpoint for job
+       *
+       * @param $id: Job id.
+       *
+       * @return API endpoint the job id.
+       */
       public function get_job_url($id){
-        return rest_url($this->namespace . '/job/' . $id);
+        return $this->get_root_url('/job/' . $id);
       }
 
+      /**
+       * Endpoint for job
+       *
+       * @param $id: Job id.
+       * @param $step: What to do with the job.
+       *
+       * @return API endpoint for step of the job.
+       */
       public function get_job_step_url($id, $step){
-        return $this->get_job_url($id) . "/step/" . $step;
+        return $this->get_job_url($id) . '/step/' . $step;
       }
 
     }
