@@ -68,7 +68,17 @@ namespace wpCloud\StatelessMedia {
           'callback' => array( $this, 'jobs' ),
         ) );
 
-        /*
+        
+        /**
+         * Get job details.
+         * 
+         * Request parameter:
+         *    id: job id
+         * 
+         * Response: 
+         *    job.
+         * 
+         */
         register_rest_route( $this->namespace, '/job/(?P<id>\d+)', array(
           'methods' => 'GET',
           'callback' => array( $this, 'get_job' ),
@@ -78,7 +88,7 @@ namespace wpCloud\StatelessMedia {
             }
           ),
         ) );
-        */
+        
 
         /**
          * Synchronize attachment.
@@ -207,11 +217,7 @@ namespace wpCloud\StatelessMedia {
         $job->callback_url = $this->get_root_url("/process_image/%data_id%");
         $job->status_url = $this->get_root_url('/status');
 
-        return array(
-          "ok" => true,
-          "message" => "Job Details.",
-          "response" => $job,
-        );
+        return $job;
 
       }
 
@@ -229,7 +235,7 @@ namespace wpCloud\StatelessMedia {
         switch ($data['step']) {
           case 'start':
             $message = "Job started.";
-            $response = wp_remote_post( $this->job_handler_endpoint . 'job/start', array(
+            $response = wp_remote_post( $this->job_handler_endpoint . "job/$id/start", array(
                   'body' => $this->get_job($id),
                 )
             );
