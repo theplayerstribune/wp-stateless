@@ -244,7 +244,7 @@ namespace wpCloud\StatelessMedia {
             break;
           case 'stop':
             $message = "Job stoped.";
-            $response = wp_remote_get( $this->job_handler_endpoint . "job/$id/stop",);
+            $response = wp_remote_get( $this->job_handler_endpoint . "job/$id/stop");
             break;
           
           default:
