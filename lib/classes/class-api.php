@@ -235,7 +235,7 @@ namespace wpCloud\StatelessMedia {
         switch ($data['step']) {
           case 'start':
             $message = "Job started.";
-            $response = wp_remote_post( $this->job_handler_endpoint . "job/$id/start", array(
+            $response = wp_remote_post( $this->job_handler_endpoint . "job/$id", array(
                   'body' => $this->get_job($id),
                 )
             );
