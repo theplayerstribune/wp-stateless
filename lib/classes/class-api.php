@@ -210,12 +210,15 @@ namespace wpCloud\StatelessMedia {
 
         $where_query = "WHERE id = '{$data['id']}'";
         $sql = "SELECT * FROM {$this->table_name} $where_query";
-
-        $job = $wpdb->get_row($sql);
-        $job->url = $this->get_job_url($job->id);
-        $job->url_start = $this->get_job_step_url($job->id, "start");
-        $job->callback_url = $this->get_root_url("/process_image/%data_id%");
-        $job->status_url = $this->get_root_url('/status');
+        $job = array();
+        $job['data'] = $wpdb->get_row($sql);
+        $job['meta'] = array();
+        $job['url'] = $this->get_job_url($job->id);
+        $job['url_start'] = $this->get_job_step_url($job->id, "start");
+        $job['callback_url'] = $this->get_root_url("/process_image/");
+        $job['status_url'] = $this->get_root_url('/status');
+        $job['notifyOnFail'] = get_current_user()->mail;
+        $job['userID']       = get_current_user_id();
 
         return $job;
 
@@ -292,6 +295,8 @@ namespace wpCloud\StatelessMedia {
             'payload'         => '',
             'synced_items'    => '',
             'failed_items'    => '',
+            'notifyOnFail'    => get_current_user()->mail,
+            'userID'          => get_current_user_id(),
             'created_on'      => current_time( 'mysql' ), // do it in sql
             'updated_on'      => current_time( 'mysql' ), // do it in sql
             'callback_secret' => wp_generate_password( 20, true, true ),
