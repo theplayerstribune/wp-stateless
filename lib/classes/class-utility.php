@@ -28,12 +28,13 @@ namespace wpCloud\StatelessMedia {
           include_once( __DIR__ . '/class-logger.php' );
         }
 
-
         if( !class_exists( 'wpCloud\StatelessMedia\Logger' )) {
           return;
         }
 
-        Logger::log( '[wp-stateless]', $data );
+        if( defined( 'WP_STATELESS_CONSOLE_LOG' ) && WP_STATELESS_CONSOLE_LOG ) {
+          Logger::log( '[wp-stateless]', $data );
+        }
 
       }
 
@@ -143,6 +144,7 @@ namespace wpCloud\StatelessMedia {
        * @return bool|string
        */
       public static function add_media( $metadata, $attachment_id ) {
+        $upload_dir = wp_upload_dir();
 
         /* Get metadata in case if method is called directly. */
         if( current_filter() !== 'wp_generate_attachment_metadata' && current_filter() !== 'wp_update_attachment_metadata' ) {
@@ -153,15 +155,16 @@ namespace wpCloud\StatelessMedia {
 
         if( !is_wp_error( $client ) ) {
 
+          $fullsizepath = wp_normalize_path( get_attached_file( $attachment_id ) );
           // Make non-images uploadable.
           if( empty( $metadata['file'] ) && $attachment_id ) {
-            $upload_dir = wp_upload_dir();
             $metadata = array( "file" => str_replace( trailingslashit( $upload_dir[ 'basedir' ] ), '', get_attached_file( $attachment_id ) ) );
           }
 
           $file = wp_normalize_path( $metadata[ 'file' ] );
 
-          $bucketLink = apply_filters('wp_stateless_bucket_link', 'https://storage.googleapis.com/' . ud_get_stateless_media()->get( 'sm.bucket' ));
+          $image_host = ud_get_stateless_media()->get_gs_host();
+          $bucketLink = apply_filters('wp_stateless_bucket_link', $image_host);
 
           $_metadata = array(
             "width" => isset( $metadata[ 'width' ] ) ? $metadata[ 'width' ] : null,
@@ -228,7 +231,7 @@ namespace wpCloud\StatelessMedia {
 
               /* Add 'image size' image */
               $media = $client->add_media( array(
-                'name' => $file_path = $mediaPath . '/' . $data[ 'file' ],
+                'name' => $file_path = trim($mediaPath . '/' . $data[ 'file' ], '/'),
                 'absolutePath' => $absolutePath,
                 'cacheControl' => $_cacheControl,
                 'contentDisposition' => $_contentDisposition,
@@ -254,11 +257,21 @@ namespace wpCloud\StatelessMedia {
                   'mediaLink' => $media[ 'mediaLink' ],
                   'selfLink' => $media[ 'selfLink' ]
                 );
-
+                
+                // Stateless mode: we don't need the local version.
+                if(ud_get_stateless_media()->get( 'sm.mode' ) === 'stateless'){
+                  unlink($absolutePath);
+                }
               }
+
 
             }
 
+          }
+
+          // Stateless mode: we don't need the local version.
+          if(ud_get_stateless_media()->get( 'sm.mode' ) === 'stateless'){
+            unlink($fullsizepath);
           }
 
           update_post_meta( $attachment_id, 'sm_cloud', $cloud_meta );

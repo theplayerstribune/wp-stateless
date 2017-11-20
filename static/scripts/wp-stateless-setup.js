@@ -41,7 +41,7 @@ wp.stateless = {
         wp.stateless.access_token = null;
         sessionStorage.removeItem( 'wp.stateless.token' );
         sessionStorage.removeItem( 'wp.stateless.expiry_date' );
-        History.replaceState('', title, '?page=stateless-setup-wizard&step=google-login');
+        History.replaceState('', title, '?page=stateless-setup&step=google-login');
         return true;
     } catch( error ) {
       console.error( error.message );
@@ -51,8 +51,6 @@ wp.stateless = {
 
   },
   getAccessToken: function getAccessToken(options) {
-    if(wp.stateless.access_token)
-      return wp.stateless.access_token;
 
     if( 'string' !== typeof wp.stateless.$_GET('access_token') ) {
       // There is no token in query string. Lets look in session.
@@ -62,8 +60,13 @@ wp.stateless = {
       if( sessionStorage.getItem( 'wp.stateless.token' ) && !isExpired) {
         wp.stateless.access_token = sessionStorage.getItem( 'wp.stateless.token' );
       }
-      else if(typeof options == 'undefined' || options.triggerEvent !== false){
-        jQuery(document).trigger('tokenExpired');
+      else{
+        if(typeof options == 'undefined' || options.triggerEvent !== false){
+          jQuery(document).trigger('tokenExpired');
+        }
+        if(isExpired){
+          wp.stateless.clearAccessToken();
+        }
         return false;
       }
     }
@@ -79,7 +82,7 @@ wp.stateless = {
           wp.stateless.access_token = _token;
           sessionStorage.setItem( 'wp.stateless.token', _token );
           sessionStorage.setItem( 'wp.stateless.expiry_date', expiry_date );
-          History.replaceState('', title, '?page=stateless-setup-wizard&step=setup-project');
+          History.replaceState('', title, '?page=stateless-setup&step=setup-project');
         }
       }
 
@@ -110,7 +113,8 @@ wp.stateless = {
 
     var defer = new jQuery.Deferred();
     var getPrimaryData = function getPrimaryData(items){
-      var primaryItem = items[0];
+
+      var primaryItem = items && typeof items[0] != 'undefined'? items[0] : '';
       jQuery.each(items, function(index, item){
         if(item.metadata.primary == true){
           primaryItem = item;
@@ -132,7 +136,7 @@ wp.stateless = {
         photo: photo.url
       }
       defer.resolve(profile);
-    }).fail(function(){
+    }).fail(function(xhr){
       defer.reject();
     });
     
@@ -163,14 +167,7 @@ wp.stateless = {
       method: "POST",
       data: JSON.stringify( options ),
     }).done(function( responseData  ) {
-      wp.stateless.createProjectProgress(responseData.name);
-
-      jQuery(document).on('wp-stateless-project-created-' + responseData.name, function(argument) {
-        defer.resolve(responseData);
-      });
-      jQuery(document).on('project-creation-faild-' + responseData.name, function(argument) {
-        defer.reject(responseData);
-      });
+      defer.resolve(responseData);
     }).fail(function(responseData) {
       defer.reject(responseData);
     });
@@ -182,19 +179,25 @@ wp.stateless = {
 
 
   createProjectProgress: function createProjectProgress(name){
+    var defer = new jQuery.Deferred();
+  
+    if(!wp.stateless.getAccessToken() || !name){
+      defer.reject();
+      return defer.promise();
+    }
+
     jQuery.ajax({
       url: 'https://cloudresourcemanager.googleapis.com/v1/' + name,
     }).done(function(responseData){
-      if(typeof responseData.done != 'undefined' && responseData.done == true){
-        jQuery(document).trigger('wp-stateless-project-created-' + name);
+      if(typeof responseData.done != 'undefined' && responseData.done == true && typeof responseData.error == 'undefined'){
+        defer.resolve(responseData);
       }else{
-        setTimeout(function(argument) {
-          wp.stateless.createProjectProgress(name);
-        }, 800);
+        defer.reject(responseData);
       }
     }).fail(function(responseData) {
-      jQuery(document).trigger('project-creation-faild-' + name);
+      defer.reject(responseData);
     });
+    return defer.promise();
   },
 
   /**
@@ -232,7 +235,7 @@ wp.stateless = {
       });
 
       defer.resolve(projects);
-    }).fail(function(){
+    }).fail(function(xhr){
       defer.reject();
     });
     return defer.promise();
@@ -251,9 +254,80 @@ wp.stateless = {
     var promis = jQuery.ajax({
       url: 'https://www.googleapis.com/storage/v1/b/?project=' + options.projectId,
       method: "POST",
-      data: JSON.stringify({name: options.name}),
+      data: JSON.stringify({
+        name: options.name,
+        storageClass: 'MULTI_REGIONAL',
+        location: options.location || 'us',
+      }),
     });
     return promis;
+  },
+
+  /**
+   * Get Projects
+   * https://cloud.google.com/service-management/enable-disable
+   * wp.stateless.listProjects()
+   *
+   */
+  enableAPI: function enableAPI(projectId) {
+    var defer = new jQuery.Deferred();
+
+    if(!wp.stateless.getAccessToken() || !projectId){
+      defer.reject();
+      return defer.promise();
+    }
+
+    jQuery.ajax({
+      url: 'https://servicemanagement.googleapis.com/v1/services/storage-api.googleapis.com:enable',
+      method: "POST",
+      data: JSON.stringify({consumerId: 'project:' + projectId}),
+    }).done(function(responseData){
+      wp.stateless.enableAPIStatus(responseData.name).done(function(operation){
+        defer.resolve();
+      }).fail(function(){
+        defer.reject();
+      });
+    }).fail(function(){
+      defer.reject();
+    });
+
+    return defer.promise();
+  },
+
+  /**
+   * Get Projects
+   *
+   * wp.stateless.listProjects()
+   *
+   */
+  enableAPIStatus: function enableAPIStatus(operation, defer) {
+    if (!defer) {
+      defer = new jQuery.Deferred();
+    }
+  
+    if(!wp.stateless.getAccessToken() || !operation){
+      defer.reject();
+      return defer.promise();
+    }
+
+    jQuery.ajax({
+      url: 'https://servicemanagement.googleapis.com/v1/' + operation,
+      method: "GET",
+    }).done(function(responseData){
+      if(typeof responseData.done != 'undefined' && responseData.done == true && typeof responseData.error == 'undefined'){
+        defer.resolve();
+      }else if(typeof responseData.error != 'undefined'){
+        defer.reject();
+      }else{
+        setTimeout(function(argument) {
+          wp.stateless.enableAPIStatus(operation, defer);
+        }, 1000);
+      }
+    }).fail(function(responseData) {
+      defer.reject();
+    });
+
+    return defer.promise();
   },
   /**
    * Get Projects
@@ -276,9 +350,9 @@ wp.stateless = {
       var buckets = [];
 
       jQuery.each(responseData.items, function(index, item){
-        var bucket = {id: item.id, name: item.name};
+        var bucket = {name: item.name};
         buckets.push(bucket);
-        wp.stateless.projects[projectId]['buckets'][item.id] = bucket;
+        wp.stateless.projects[projectId]['buckets'][item.id] = item;
       });
 
       defer.resolve(buckets);
@@ -296,7 +370,6 @@ wp.stateless = {
    * @returns {boolean}
    */
   getServiceAccounts: function getServiceAccounts(options) {
-    console.log( 'getServiceAccounts', options );
 
     if(!wp.stateless.getAccessToken() || !options)
       return false;
@@ -307,7 +380,6 @@ wp.stateless = {
     });
 
     _promis.done(function(responseData){
-      console.log( 'getServiceAccounts:done', responseData.accounts );
       wp.stateless.projects[options.projectId]['serviceAccounts'] = responseData.accounts;
 
     });
@@ -319,7 +391,7 @@ wp.stateless = {
   /**
    *
    * wp.stateless.createServiceAccount()
-   *
+   * Doc: https://cloud.google.com/iam/reference/rest/v1/projects.serviceAccounts/create
    * @param options
    * @returns {boolean}
    */
@@ -385,20 +457,61 @@ wp.stateless = {
    *
    * wp.stateless.createServiceAccount()
    * Doc: https://cloud.google.com/storage/docs/json_api/v1/bucketAccessControls/insert
+   * Doc: https://cloud.google.com/storage/docs/json_api/v1/buckets/setIamPolicy
    * @param options
    * @returns {boolean}
    */
   insertBucketAccessControls: function insertBucketAccessControls(options) {
+    var promis = new jQuery.Deferred();
 
     if(!wp.stateless.getAccessToken() || !options)
       return false;
-    var promis = jQuery.ajax({
-      url: 'https://www.googleapis.com/storage/v1/b/' + options.bucket + '/acl',
-      method: "POST",
-      data: JSON.stringify({
-        entity: "user-" + options.user,
-        role: options.role || 'OWNER',
-      }),
+
+    var lagecyAccess = function(){
+      jQuery.ajax({
+        url: 'https://www.googleapis.com/storage/v1/b/' + options.bucket + '/acl',
+        method: "POST",
+        data: JSON.stringify({
+          entity: "user-" + options.user,
+          role: options.role || 'OWNER',
+        })
+      }).done(function(response){
+        promis.resolve(response);
+      }).fail(function(error) {
+        promis.reject(error);
+      });;
+    }
+
+    jQuery.get('https://www.googleapis.com/storage/v1/b/' + options.bucket + '/iam')
+    .done(function(iam){
+      var existing = false;
+      iam.bindings.forEach(function(item, index){
+        if(item.role == "roles/storage.admin"){
+          existing = item.members.indexOf("serviceAccount:" + options.user);
+          if(existing == -1){
+            item.members.push("serviceAccount:" + options.user);
+          }
+        }
+      });
+
+      if(existing === false){
+        iam.bindings.push({
+          role: options.role || 'roles/storage.admin',
+          members: [ "serviceAccount:" + options.user ]
+        });
+      }
+
+      jQuery.ajax({
+        url: 'https://www.googleapis.com/storage/v1/b/' + options.bucket + '/iam',
+        method: "PUT",
+        data: JSON.stringify(iam),
+      }).done(function(response){
+        promis.resolve(response);
+      }).fail(function(error) {
+        lagecyAccess();
+      });
+    }).fail(function(error) {
+      lagecyAccess();
     });
     return promis;
   },
@@ -420,17 +533,28 @@ wp.stateless = {
     jQuery.ajax({
       url: 'https://cloudbilling.googleapis.com/v1/projects/' + projectID + '/billingInfo',
     }).done(function(responseData){
+      var billingInfo = {};
+
       if(typeof responseData.billingAccountName != 'undefined'){
-        responseData.billingAccountName = responseData.billingAccountName.replace('billingAccounts/', '');
+        billingInfo.id = responseData.billingAccountName.replace('billingAccounts/', '');
+      }else{
+        defer.reject();
       }
 
       if(typeof responseData.billingEnabled != 'undefined' && responseData.billingEnabled == true){
         wp.stateless.projects[projectID]['billingInfo'] = responseData;
+        billingInfo.billingEnabled = responseData.billingEnabled;
       }
 
-      defer.resolve(responseData);
-    }).fail(function() {
-      defer.reject();
+      wp.stateless.getBillingAccount(responseData.billingAccountName).done(function(displayName) {
+        billingInfo.name = displayName;
+        defer.resolve(billingInfo);
+      }).fail(function(error) {
+        defer.resolve(billingInfo);
+      });
+
+    }).fail(function(responseData) {
+      defer.reject(responseData.responseJSON);
     });
     return defer.promise();
   },
@@ -475,6 +599,24 @@ wp.stateless = {
       defer.resolve(billingAccounts);
     }).fail(function(){
       defer.reject();
+    });
+    return defer.promise();
+  },
+
+  getBillingAccount: function getBillingAccount(name) {
+    var defer = new jQuery.Deferred();
+
+    if(!wp.stateless.getAccessToken()){
+      defer.reject();
+      return defer.promise();
+    }
+
+    jQuery.ajax({
+      url: 'https://cloudbilling.googleapis.com/v1/' + name,
+    }).done(function(billingAccount){
+      defer.resolve(billingAccount.displayName);
+    }).fail(function(xhr){
+      defer.reject(xhr);
     });
     return defer.promise();
   },

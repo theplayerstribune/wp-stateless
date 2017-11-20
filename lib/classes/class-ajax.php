@@ -19,7 +19,9 @@ namespace wpCloud\StatelessMedia {
         'stateless_process_image',
         'get_images_media_ids',
         'get_other_media_ids',
+        'get_non_library_files_id',
         'stateless_process_file',
+        'stateless_process_non_library_file',
         'stateless_get_current_progresses',
         'stateless_wizard_update_settings',
         'stateless_reset_progress',
@@ -90,16 +92,61 @@ namespace wpCloud\StatelessMedia {
 
       }
 
-
       /**
        * Update json key to database.
        */
       public function action_stateless_wizard_update_settings($data) {
         $bucket = $data['bucket'];
         $privateKeyData = base64_decode($data['privateKeyData']);
-        update_option( 'sm_bucket', $bucket);
-        update_option( 'sm_key_json', $privateKeyData);
-        wp_send_json(array('success' => true, 'settings_url' => admin_url('options-media.php')));
+
+        if(is_network_admin()){
+          if(get_site_option('sm_mode', 'disabled') == 'disabled')
+            update_site_option( 'sm_mode', 'cdn');
+          update_site_option( 'sm_bucket', $bucket);
+          update_site_option( 'sm_key_json', $privateKeyData);
+        }
+        else{
+          if(get_option('sm_mode', 'disabled') == 'disabled')
+            update_option( 'sm_mode', 'cdn');
+          update_option( 'sm_bucket', $bucket);
+          update_option( 'sm_key_json', $privateKeyData);
+        }
+
+        ud_get_stateless_media()->flush_transients();
+        wp_send_json(array('success' => true));
+      }
+
+      /**
+       * Fail over to image URL if not found on disk
+       * In case image not available on both local and bucket
+       * try to pull image from image URL in case it is accessible by some sort of proxy.
+       * 
+       * @param:
+       * $url (int/string): URL of the image.
+       * $save_to (string): Path where to save the image.
+       * 
+       * @return:
+       * boolean (true/false)
+       * 
+       */
+      public function get_attachment_if_exist($url, $save_to){
+        if(is_int($url))
+          $url = wp_get_attachment_url($url);
+
+        $response = wp_remote_get( $url );
+        if ( !is_wp_error($response) && is_array( $response ) ) {
+          if(!empty($response['response']['code']) && $response['response']['code'] == 200){
+            try{
+              if(wp_mkdir_p(dirname($save_to))){
+                return file_put_contents($save_to, $response['body']);
+              }
+            }
+            catch(Exception $e){
+              throw $e;
+            }
+          }
+        }
+        return false;
       }
 
       /**
@@ -128,8 +175,10 @@ namespace wpCloud\StatelessMedia {
           $result_code = ud_get_stateless_media()->get_client()->get_media( apply_filters( 'wp_stateless_file_name', str_replace( trailingslashit( $upload_dir[ 'basedir' ] ), '', $fullsizepath )), true, $fullsizepath );
 
           if ( $result_code !== 200 ) {
-            $this->store_failed_attachment( $image->ID, 'images' );
-            throw new \Exception(sprintf(__('Both local and remote files are missing. Unable to resize. (%s)', ud_get_stateless_media()->domain), $image->guid));
+            if(!$this->get_attachment_if_exist($image->ID, $fullsizepath)){ // Save file to local from proxy.
+              $this->store_failed_attachment( $image->ID, 'images' );
+              throw new \Exception(sprintf(__('Both local and remote files are missing. Unable to resize. (%s)', ud_get_stateless_media()->domain), $image->guid));
+            }
           }
         }
 
@@ -172,18 +221,29 @@ namespace wpCloud\StatelessMedia {
           throw new \Exception( __( "You are not allowed to do this.", ud_get_stateless_media()->domain ) );
 
         $fullsizepath = get_attached_file( $file->ID );
+        $local_file_exists = file_exists( $fullsizepath );
 
-        if ( false === $fullsizepath || ! file_exists( $fullsizepath ) ) {
+        if ( false === $fullsizepath || ! $local_file_exists ) {
           $upload_dir = wp_upload_dir();
 
           // Try get it and save
           $result_code = ud_get_stateless_media()->get_client()->get_media( str_replace( trailingslashit( $upload_dir[ 'basedir' ] ), '', $fullsizepath ), true, $fullsizepath );
 
           if ( $result_code !== 200 ) {
-            $this->store_failed_attachment( $file->ID, 'other' );
-            throw new \Exception(sprintf(__('File not found (%s)', ud_get_stateless_media()->domain), $file->guid));
+            if(!$this->get_attachment_if_exist($file->ID, $fullsizepath)){ // Save file to local from proxy.
+              $this->store_failed_attachment( $file->ID, 'other' );
+              throw new \Exception(sprintf(__('File not found (%s)', ud_get_stateless_media()->domain), $file->guid));
+            }
+            else{
+              $local_file_exists = true;
+            }
           }
-        } else {
+          else{
+            $local_file_exists = true;
+          }
+        }
+
+        if($local_file_exists){
           $upload_dir = wp_upload_dir();
 
           if ( !ud_get_stateless_media()->get_client()->media_exists( str_replace( trailingslashit( $upload_dir[ 'basedir' ] ), '', $fullsizepath ) ) ) {
@@ -203,6 +263,85 @@ namespace wpCloud\StatelessMedia {
 
             wp_update_attachment_metadata( $file->ID, $metadata );
 
+          }
+          else{
+            // Stateless mode: we don't need the local version.
+            if(ud_get_stateless_media()->get( 'sm.mode' ) === 'stateless'){
+              unlink($fullsizepath);
+            }
+          }
+
+        }
+
+        $this->store_current_progress( 'other', $id );
+        $this->maybe_fix_failed_attachment( 'other', $file->ID );
+
+        return sprintf( __( '%1$s (ID %2$s) was successfully synchronised in %3$s seconds.', ud_get_stateless_media()->domain ), esc_html( get_the_title( $file->ID ) ), $file->ID, timer_stop() );
+      }
+
+      /**
+       * @return string
+       * @throws \Exception
+       */
+      public function action_stateless_process_non_library_file() {
+        @error_reporting( 0 );
+        $upload_dir = wp_upload_dir();
+        $client = ud_get_stateless_media()->get_client();
+
+        $file_path = trim($_REQUEST['file_path'], '/');
+        $fullsizepath = $upload_dir['basedir'] . '/' . $file_path;
+
+        if ( ! current_user_can( 'manage_options' ) )
+          throw new \Exception( __( "You are not allowed to do this.", ud_get_stateless_media()->domain ) );
+
+        $local_file_exists = file_exists( $fullsizepath );
+
+        if ( !$local_file_exists ) {
+
+          // Try get it and save
+          $result_code = ud_get_stateless_media()->get_client()->get_media( $fullsizepath, true, $fullsizepath );
+
+          if ( $result_code !== 200 ) {
+            // if(!$this->get_attachment_if_exist($file->ID, $fullsizepath)){ // Save file to local from proxy.
+              $this->store_failed_attachment( $file->ID, 'other' );
+              throw new \Exception(sprintf(__('File not found (%s)', ud_get_stateless_media()->domain), $file->guid));
+            // }
+            // else{
+              // $local_file_exists = true;
+            // }
+          }
+          else{
+            $local_file_exists = true;
+          }
+        }
+
+        if($local_file_exists){
+
+          if ( !ud_get_stateless_media()->get_client()->media_exists( $file_path )) {
+
+            @set_time_limit( -1 );
+            $file_type = wp_check_filetype($fullsizepath);
+            /* Add 'image size' image */
+            $media = $client->add_media( array(
+              'name' => $file_path,
+              'absolutePath' => $fullsizepath,
+              'cacheControl' => apply_filters( 'sm:item:cacheControl', 'public, max-age=36000, must-revalidate', $fullsizepath),
+              'contentDisposition' => apply_filters( 'sm:item:contentDisposition', null, $fullsizepath),
+              'mimeType' => $file_type['type'],
+              'metadata' => array(
+                'child-of' => dirname($file_path),
+                'file-hash' => md5( $file_path ),
+              ),
+            ));
+
+
+
+          }
+          else{
+            // Stateless mode: we don't need the local version.
+            if(ud_get_stateless_media()->get( 'sm.mode' ) === 'stateless'){
+              unlink($fullsizepath);
+            }
           }
 
         }
@@ -247,6 +386,22 @@ namespace wpCloud\StatelessMedia {
         }
 
         return $this->get_non_processed_media_ids( 'other', $files, $continue );
+      }
+
+      /**
+       * Returns IDs of non media library files
+       */
+      public function action_get_non_library_files_id() {
+        $files = array();
+        $upload_dir = wp_upload_dir();
+        $siteorigin_dir = '/siteorigin-widgets/';
+        if(is_dir($upload_dir['basedir'] . $siteorigin_dir)){
+          $files = glob( $upload_dir['basedir'] . $siteorigin_dir . "*" );
+          foreach ($files as $id => $file) {
+            $files[$id] = str_replace(wp_normalize_path($upload_dir['basedir']), '', wp_normalize_path($file));
+          }
+        }
+        return $files;
       }
 
       /**

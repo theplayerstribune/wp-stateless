@@ -2,169 +2,23 @@
 /**
  * API Handler
  *
- * @author alimuzzaman
+ *
+ *
  * @since 1.0.0
  */
 namespace wpCloud\StatelessMedia {
 
   if( !class_exists( 'wpCloud\StatelessMedia\API' ) ) {
 
+
     final class API {
-      public function __construct(){
-        global $wpdb;
-
-        // wordpress
-        $this->namespace = 'wp-stateless/v1';
-        $this->table_name = $wpdb->prefix . "stateless_job";
-
-        // job handler service endpoint
-        $this->job_handler_endpoint = 'http://api.usabilitydynamics.com/product/stateless/v1/';
-
-        // Invoke REST API
-        add_action( 'rest_api_init', array( $this, 'api_init' ) );
-      }
-
-
-
-      /**
-       * Define REST API.
-       *
-       * // https://usabilitydynamics-sandbox-uds-io-stateless-testing.c.rabbit.ci/wp-json/wp-stateless/v1
-       *
-       * @author potanin@UD
-       */
-      public function api_init() {
-
-        /**
-         * Check current status of Stateless API.
-         * Whether it's accessible or not.
-         * 
-         * Request parameter: none
-         * 
-         * Response: 
-         *    ok: Whether API is up or not
-         *    message: Describe what is done or error message on error.
-         * 
-         */
-        register_rest_route( $this->namespace, '/status', array(
-          'methods' => 'GET',
-          'callback' => array( $this, 'status' ),
-        ) );
-
-        /**
-         *** Private ***
-         * Return list of job ids.
-         * 
-         * Request parameter: none
-         * 
-         * Response: 
-         *    ok: Whether request succeeded or not
-         *    message: Describe what is done or error message on error.
-         *    jobs: array of job ids
-         * 
-         */
-        register_rest_route( $this->namespace, '/jobs', array(
-          'methods' => 'GET',
-          'callback' => array( $this, 'jobs' ),
-        ) );
-
-        
-        /**
-         * Get job details.
-         * 
-         * Request parameter:
-         *    id: job id
-         * 
-         * Response: 
-         *    job.
-         * 
-         */
-        register_rest_route( $this->namespace, '/job/(?P<id>\d+)', array(
-          'methods' => 'GET',
-          'callback' => array( $this, 'get_job' ),
-          'id' => array(
-            'validate_callback' => function($param, $request, $key) {
-              return is_numeric( $param );
-            }
-          ),
-        ) );
-        
-
-        /**
-         * Synchronize attachment.
-         * 
-         * Request parameter:
-         *    id: job id
-         * 
-         * Response: 
-         *    ok: Whether attachment synced or not
-         *    message: Describe what is done or error message on error.
-         * 
-         */
-        register_rest_route( $this->namespace, '/process_attachment/(?P<id>\d+)', array(
-          'methods' => 'GET',
-          'callback' => array( $this, 'process_attachment' ),
-          'id' => array(
-            'validate_callback' => function($param, $request, $key) {
-              return is_numeric( $param );
-            }
-          ),
-        ) );
-
-        /**
-         *** Private ***
-         * Start or stop a job.
-         * 
-         * Example query: /job/{id}/{step}
-         *                /job/5466/start
-         * 
-         * Request parameter:
-         *    id: job id
-         *    step: start, stop, pause, resume
-         * 
-         * Response: 
-         *    ok: Whether request succeeded or not
-         *    message: Describe what is done or error message on error.
-         * 
-         */
-        register_rest_route( $this->namespace, '/job/(?P<id>\d+)/(?P<step>\w+)', array(
-          'methods' => 'GET',
-          'callback' => array( $this, 'job_step' ),
-          'id' => array(
-            'validate_callback' => function($param, $request, $key) {
-              return is_numeric( $param );
-            }
-          ),
-        ) );
-
-        /**
-         *** Private ***
-         * Create a new job and start it.
-         * 
-         * Example query: /job/create/
-         * 
-         * Request body:
-         *    bulk_size: The amount of attachment to process at a time.
-         * 
-         * Response: 
-         *    ok: Whether job started or not.
-         *    message: "Job started" on success.
-         *    response: Describe what is done or error message on error.
-         * 
-         */
-        register_rest_route( $this->namespace, '/job/create/', array(
-          'methods' => 'POST',
-          'callback' => array( $this, 'create_job' ),
-        ) );
-
-      }
 
       /**
        * API Status Endpoint.
        *
        * @return array
        */
-      public function status() {
+      static public function status() {
 
         return array(
           "ok" => true,
@@ -174,191 +28,199 @@ namespace wpCloud\StatelessMedia {
       }
 
       /**
-       * Jobs list Endpoint.
+       * Jobs Endpoint.
        *
-       * @return array of job ids
+       * @return array
        */
-      public function jobs() {
-        global $wpdb;
-
-        $where_query = "WHERE status != 'completed'";
-        $sql = "SELECT id FROM {$this->table_name} $where_query";
-
-        $jobs = $wpdb->get_col($sql);
-
-        //$jobs_url = array();
-        //foreach ($jobs as $job) {
-        //  $jobs_url[] = $this->get_job_url($job['id']);
-        //}
+      static public function jobs() {
 
         return array(
           "ok" => true,
           "message" => "Job endpoint up.",
-          "jobs" => $jobs,
+          "jobs" => array()
         );
 
       }
 
       /**
-       * Jobs Details.
+       * Get settings Endpoint.
        *
+       * @param $request
        * @return array
        */
-      public function get_job($data) {
-        global $wpdb;
-        $table = $wpdb->prefix . "stateless_job";
+      static public function getSettings( $request ) {
 
-        $where_query = "WHERE id = '{$data['id']}'";
-        $sql = "SELECT * FROM {$this->table_name} $where_query";
-        $job = array();
-        $job['data'] = $wpdb->get_row($sql);
-        $job['meta'] = array();
-        $job['url'] = $this->get_job_url($job->id);
-        $job['url_start'] = $this->get_job_step_url($job->id, "start");
-        $job['callback_url'] = $this->get_root_url("/process_image/");
-        $job['status_url'] = $this->get_root_url('/status');
-        $job['notifyOnFail'] = get_current_user()->mail;
-        $job['userID']       = get_current_user_id();
+        if( !self::authRequest( $request ) ) {
+          return array("ok" => false, "message" => __( "Auth fail." ));
+        }
 
-        return $job;
+        $settings = apply_filters('stateless::get_settings', array());
+
+        return array(
+            "ok" => true,
+            "message" => "getSettings endpoint.",
+            "settings" => $settings
+        );
 
       }
 
       /**
-       * Start, stop, pause, resume a Job.
+       * Get media library Endpoint.
        *
+       * @param $request
        * @return array
        */
-      public function job_step($data) {
-        $id       = $data['id'];
-        $success  = true;
-        $message  = null;
-        $response = null;
+      static public function getMediaLibrary( $request ) {
 
-        switch ($data['step']) {
-          case 'start':
-            $message = "Job started.";
-            $response = wp_remote_post( $this->job_handler_endpoint . "job/$id", array(
-                  'body' => $this->get_job($id),
-                )
-            );
-            break;
-          case 'pause':
-            $message = "Job paused.";
-            $response = wp_remote_get( $this->job_handler_endpoint . "job/$id/pause");
-            break;
-          case 'resume':
-            $message = "Job resumed.";
-            $response = wp_remote_get( $this->job_handler_endpoint . "job/$id/resume");
-            break;
-          case 'stop':
-            $message = "Job stoped.";
-            $response = wp_remote_get( $this->job_handler_endpoint . "job/$id/stop");
-            break;
-          
-          default:
-            $success = false;
-            $message = "Unrecognized step.";
-            break;
+        if( !self::authRequest( $request ) ) {
+          return array("ok" => false, "message" => __( "Auth fail." ));
         }
 
-        if ( is_wp_error( $response ) ) {
-          $success = false;
-          $error_message = $response->get_error_message();
-          $message = "Something went wrong: $error_message";
+        if( !self::switchBlog( $request ) ){
+          return array("ok" => false, "message" => __( "Missed blog param." ));
+        }
+
+        $query_images_args = array(
+            'post_type' => 'attachment',
+            'post_mime_type' =>'image',
+            'post_status' => 'inherit',
+            'posts_per_page' => -1,
+        );
+
+        $query_images = new \WP_Query( $query_images_args );
+        $media = array();
+        foreach ( $query_images->posts as $image) {
+          $media[] = self::mediaMapping($image);
         }
 
         return array(
-          "ok" => $success,
-          "message" => $message,
-          "response" => $response,
+            "ok" => true,
+            "message" => "getMediaLibrary endpoint.",
+            "mediaLibrary" => $media
         );
 
       }
 
       /**
-       * Create a Job.
+       * Get media item Endpoint.
        *
-       * @return response of job_step() method.
+       * @param $request
+       * @return array
        */
-      public function create_job($data) {
-        global $wpdb;
-        $ajax       = ud_get_stateless_media()->ajax;
-        $table      = $wpdb->prefix . "stateless_job";
-        $bulk_size  = !empty($data['bulk_size'])?$data['bulk_size']:1;
+      static public function getMediaItem( $request ) {
 
-        $job = array(
-            'label'           => 'Stateless Synchronization',
-            'type'            => '', // maybe remove this column 
-            'status'          => 'new',
-            'bulk_size'       => $bulk_size,
-            'payload'         => '',
-            'synced_items'    => '',
-            'failed_items'    => '',
-            'notifyOnFail'    => get_current_user()->mail,
-            'userID'          => get_current_user_id(),
-            'created_on'      => current_time( 'mysql' ), // do it in sql
-            'updated_on'      => current_time( 'mysql' ), // do it in sql
-            'callback_secret' => wp_generate_password( 20, true, true ),
-          );
+        if( !self::authRequest( $request ) ) {
+          return array("ok" => false, "message" => __( "Auth fail." ));
+        }
 
-        $image_ids = $ajax->action_get_images_media_ids();
-        $other_ids = $ajax->action_get_other_media_ids();
-        $job['payload'] = array_merge($image_ids, $other_ids);
+        if( !self::switchBlog( $request ) ){
+          return array("ok" => false, "message" => __( "Missed blog param." ));
+        }
 
-        $wpdb->insert( $table, $job );
+        $attachment_id = $request->get_param('attachment_id');
+        if(!$attachment_id){
+          return array("ok" => false, "message" => __( "Missing attachment id." ));
+        }
 
-        $response = $this->job_step(array('step' => 'start', 'id' => $wpdb->insert_id));
+        $attachment = get_post($attachment_id);
 
-        return $response;
+        if(!$attachment){
+          return array("ok" => false, "message" => __( "Wrong attachment id." ));
+        }
 
-      } // end create_job()
+        $item = self::mediaMapping($attachment);
 
+        return array(
+            "ok" => true,
+            "message" => "getMediaItem endpoint.",
+            "mediaItem" => $item
+        );
 
-      /**
-       * Process attachment sync request from UD product API.
-       *
-       * @return response of API_F::process_attachment() method.
-       *    ok: Whether attachment synced or not
-       *    message: Describe what is done or error message on error.
-       */
-      public function process_attachment($data){
-        // Both image and others.
-        return API_F::process_attachment($data['id']);
       }
 
       /**
-       * Return root API endpoint
+       * Handle Auth.
        *
-       * @param $route (Optional): If specified added with root url.
-       *
-       * @return API endpoint.
+       * @param $request
+       * @return bool
        */
-      public function get_root_url($route = ''){
-        return rest_url($this->namespace . $route);
+      static public function authRequest( $request = false ) {
+
+        //die( '<pre>' . print_r($request->get_param('key'),true) . '</pre>' );
+
+        if( !$request ) {
+          return false;
+        }
+
+        if( !$request->get_param('key') ) {
+          return false;
+        }
+
+        $settings = apply_filters('stateless::get_settings', array());
+
+        if( !$settings[ 'api_key' ] ) {
+          return false;
+        }
+
+        if( $request->get_param('key') !== $settings[ 'api_key' ] ) {
+          return false;
+        }
+
+        return true;
+
+
       }
 
       /**
-       * Endpoint for job
+       * Check blog param and switch to requested blog
        *
-       * @param $id: Job id.
-       *
-       * @return API endpoint the job id.
+       * @param bool $request
+       * @return bool
        */
-      public function get_job_url($id){
-        return $this->get_root_url('/job/' . $id);
+      static public function switchBlog( $request = false ){
+
+        if(!is_multisite()){
+          return true;
+        }
+
+        if( !$request ) {
+          return false;
+        }
+
+        $blog_id = $request->get_param('blog');
+        if( !$blog_id ) {
+          return false;
+        }
+
+        $current_blog_id = get_current_blog_id();
+        if($current_blog_id == $blog_id){
+          return true;
+        }
+
+        return switch_to_blog( $blog_id );
       }
 
       /**
-       * Endpoint for job
+       * Applying mapping for media item
        *
-       * @param $id: Job id.
-       * @param $step: What to do with the job.
-       *
-       * @return API endpoint for step of the job.
+       * @param $image
+       * @return array
        */
-      public function get_job_step_url($id, $step){
-        return $this->get_job_url($id) . '/step/' . $step;
+      static private function mediaMapping($image){
+
+        if(!$image){
+          return array();
+        }
+
+        return array(
+            'attachment_id' => $image->ID,
+            'date_create' => $image->post_date,
+            'parent' => $image->post_parent,
+            'link' => wp_get_attachment_url($image->ID),
+            'title' => $image->post_title,
+            'description' => $image->post_content,
+            'thumbnail' => wp_get_attachment_image_src($image->ID)[0]
+        );
       }
 
     }
