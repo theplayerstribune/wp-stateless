@@ -132,6 +132,7 @@ class Google_Client
         ],
         $config
     );
+    error_log(print_r(debug_backtrace(), 1));
   }
 
   /**
