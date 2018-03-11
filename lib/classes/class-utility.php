@@ -257,10 +257,12 @@ namespace wpCloud\StatelessMedia {
                   'mediaLink' => $media[ 'mediaLink' ],
                   'selfLink' => $media[ 'selfLink' ]
                 );
-                
+
                 // Stateless mode: we don't need the local version.
                 if(ud_get_stateless_media()->get( 'sm.mode' ) === 'stateless'){
-                  unlink($absolutePath);
+                  if ( file_exists( $absolutePath ) ) {
+                    unlink($absolutePath);
+                  }
                 }
               }
 
@@ -271,7 +273,9 @@ namespace wpCloud\StatelessMedia {
 
           // Stateless mode: we don't need the local version.
           if(ud_get_stateless_media()->get( 'sm.mode' ) === 'stateless'){
-            unlink($fullsizepath);
+            if ( file_exists( $fullsizepath ) ) {
+              unlink($fullsizepath);
+            }
           }
 
           update_post_meta( $attachment_id, 'sm_cloud', $cloud_meta );
