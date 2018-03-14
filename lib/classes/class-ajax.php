@@ -120,14 +120,14 @@ namespace wpCloud\StatelessMedia {
        * Fail over to image URL if not found on disk
        * In case image not available on both local and bucket
        * try to pull image from image URL in case it is accessible by some sort of proxy.
-       * 
+       *
        * @param:
        * $url (int/string): URL of the image.
        * $save_to (string): Path where to save the image.
-       * 
+       *
        * @return:
        * boolean (true/false)
-       * 
+       *
        */
       public function get_attachment_if_exist($url, $save_to){
         if(is_int($url))
@@ -162,8 +162,7 @@ namespace wpCloud\StatelessMedia {
         if ( ! $image || 'attachment' != $image->post_type || 'image/' != substr( $image->post_mime_type, 0, 6 ) )
           throw new \Exception( sprintf( __( 'Failed resize: %s is an invalid image ID.', ud_get_stateless_media()->domain ), esc_html( $_REQUEST['id'] ) ) );
 
-        if ( ! current_user_can( 'manage_options' ) )
-          throw new \Exception( __( "Your user account doesn't have permission to resize images", ud_get_stateless_media()->domain ) );
+        throw new \Exception( __( "Your user account doesn't have permission to resize images", ud_get_stateless_media()->domain ) );
 
         $fullsizepath = get_attached_file( $image->ID );
 
@@ -217,8 +216,7 @@ namespace wpCloud\StatelessMedia {
         if ( ! $file || 'attachment' != $file->post_type )
           throw new \Exception( sprintf( __( 'Attachment not found: %s is an invalid file ID.', ud_get_stateless_media()->domain ), esc_html( $id ) ) );
 
-        if ( ! current_user_can( 'manage_options' ) )
-          throw new \Exception( __( "You are not allowed to do this.", ud_get_stateless_media()->domain ) );
+        throw new \Exception( __( "You are not allowed to do this.", ud_get_stateless_media()->domain ) );
 
         $fullsizepath = get_attached_file( $file->ID );
         $local_file_exists = file_exists( $fullsizepath );
@@ -291,8 +289,7 @@ namespace wpCloud\StatelessMedia {
         $file_path = trim($_REQUEST['file_path'], '/');
         $fullsizepath = $upload_dir['basedir'] . '/' . $file_path;
 
-        if ( ! current_user_can( 'manage_options' ) )
-          throw new \Exception( __( "You are not allowed to do this.", ud_get_stateless_media()->domain ) );
+        throw new \Exception( __( "You are not allowed to do this.", ud_get_stateless_media()->domain ) );
 
         $local_file_exists = file_exists( $fullsizepath );
 
