@@ -162,8 +162,6 @@ namespace wpCloud\StatelessMedia {
         if ( ! $image || 'attachment' != $image->post_type || 'image/' != substr( $image->post_mime_type, 0, 6 ) )
           throw new \Exception( sprintf( __( 'Failed resize: %s is an invalid image ID.', ud_get_stateless_media()->domain ), esc_html( $_REQUEST['id'] ) ) );
 
-        throw new \Exception( __( "Your user account doesn't have permission to resize images", ud_get_stateless_media()->domain ) );
-
         $fullsizepath = get_attached_file( $image->ID );
 
         // If no file found
@@ -215,8 +213,6 @@ namespace wpCloud\StatelessMedia {
 
         if ( ! $file || 'attachment' != $file->post_type )
           throw new \Exception( sprintf( __( 'Attachment not found: %s is an invalid file ID.', ud_get_stateless_media()->domain ), esc_html( $id ) ) );
-
-        throw new \Exception( __( "You are not allowed to do this.", ud_get_stateless_media()->domain ) );
 
         $fullsizepath = get_attached_file( $file->ID );
         $local_file_exists = file_exists( $fullsizepath );
@@ -288,8 +284,6 @@ namespace wpCloud\StatelessMedia {
 
         $file_path = trim($_REQUEST['file_path'], '/');
         $fullsizepath = $upload_dir['basedir'] . '/' . $file_path;
-
-        throw new \Exception( __( "You are not allowed to do this.", ud_get_stateless_media()->domain ) );
 
         $local_file_exists = file_exists( $fullsizepath );
 
