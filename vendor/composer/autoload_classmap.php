@@ -6,6 +6,7 @@ $vendorDir = dirname(dirname(__FILE__));
 $baseDir = dirname($vendorDir);
 
 return array(
+    'ChromePhp' => $vendorDir . '/ccampbell/chromephp/ChromePhp.php',
     'UsabilityDynamics\\Job' => $vendorDir . '/usabilitydynamics/lib-utility/lib/class-job.php',
     'UsabilityDynamics\\Loader' => $vendorDir . '/usabilitydynamics/lib-utility/lib/class-loader.php',
     'UsabilityDynamics\\Settings' => $vendorDir . '/usabilitydynamics/lib-settings/lib/class-settings.php',
@@ -33,6 +34,7 @@ return array(
     'wpCloud\\StatelessMedia\\GS_Client' => $baseDir . '/lib/classes/class-gs-client.php',
     'wpCloud\\StatelessMedia\\ICompatibility' => $baseDir . '/lib/classes/class-compatibility.php',
     'wpCloud\\StatelessMedia\\Logger' => $baseDir . '/lib/classes/class-logger.php',
+    'wpCloud\\StatelessMedia\\Mock_Client' => $baseDir . '/lib/classes/class-mock-client.php',
     'wpCloud\\StatelessMedia\\Module' => $baseDir . '/lib/classes/class-compatibility.php',
     'wpCloud\\StatelessMedia\\SOWidgetCSS' => $baseDir . '/lib/classes/compatibility/so-widget-css.php',
     'wpCloud\\StatelessMedia\\Settings' => $baseDir . '/lib/classes/class-settings.php',

@@ -53,14 +53,14 @@ namespace wpCloud\StatelessMedia {
          * @since 1.9.1
          */
         load_plugin_textdomain($this->domain, false, dirname(plugin_basename($this->boot_file)) . '/static/languages/');
-        
+
         // Parse feature falgs, set constants.
         $this->parse_feature_flags();
 
         // Initialize compatibility modules.
         new Module();
         new SyncNonMedia();
-        
+
         /**
          * Define settings and UI.
          *
@@ -229,11 +229,11 @@ namespace wpCloud\StatelessMedia {
 
         }
       }
-      
+
       /**
        * Rebuild srcset from gs_link.
-       * 
-       * 
+       *
+       *
        */
       public function wp_calculate_image_srcset($sources, $size_array, $image_src, $image_meta, $attachment_id){
         foreach ($sources as $width => &$image) {
@@ -564,7 +564,7 @@ namespace wpCloud\StatelessMedia {
       /**
        * @param $value null unless other filter hooked in this function.
        * @param $object_id post id
-       * @param $meta_key 
+       * @param $meta_key
        * @param $single
        * @return mixed
        */
@@ -577,15 +577,15 @@ namespace wpCloud\StatelessMedia {
               $meta_cache = update_meta_cache( $meta_type, array( $object_id ) );
               $meta_cache = $meta_cache[$object_id];
           }
-       
+
           if ( ! $meta_key ) {
               return $this->convert_to_gs_link($meta_cache);
           }
-          
+
           if ( isset($meta_cache[$meta_key]) ) {
               return $this->convert_to_gs_link(array_map('maybe_unserialize', $meta_cache[$meta_key]));
           }
-       
+
           if ($single)
               return '';
           else
@@ -718,7 +718,7 @@ namespace wpCloud\StatelessMedia {
         /* Stateless settings page */
         wp_register_script( 'wp-stateless-settings', ud_get_stateless_media()->path( 'static/scripts/wp-stateless-settings.js', 'url'  ), array(), ud_get_stateless_media()->version );
         wp_localize_script( 'wp-stateless-settings', 'stateless_l10n', $this->get_l10n_data() );
-        
+
         wp_register_style( 'wp-stateless-settings', $this->path( 'static/styles/wp-stateless-settings.css', 'url'  ), array(), self::$version );
 
         // Sync tab
@@ -791,7 +791,7 @@ namespace wpCloud\StatelessMedia {
             wp_enqueue_script( 'wp-stateless-settings' );
             wp_enqueue_style( 'bootstrap-grid-v4' );
             wp_enqueue_style( 'wp-stateless-settings' );
-            
+
             // Sync tab
             wp_enqueue_script( 'jquery-ui-progressbar' );
             wp_enqueue_script( 'wp-stateless-angular' );
@@ -962,11 +962,19 @@ namespace wpCloud\StatelessMedia {
             $key_json = $this->get( 'sm.key_json' );
           }
 
-          /* Try to initialize GS Client */
-          $this->client = GS_Client::get_instance( array(
-            'bucket' => $this->get( 'sm.bucket' ),
-            'key_json' => $key_json
-          ) );
+          if ( 'testing' === $this->get( 'sm.mode' ) ) {
+            /* Try to initialize Mock Client */
+            $this->client = Mock_Client::get_instance( array(
+              'bucket'   => $this->get( 'sm.bucket' ),
+              'key_json' => $key_json
+            ) );
+          } else {
+            /* Try to initialize GS Client */
+            $this->client = GS_Client::get_instance( array(
+              'bucket'   => $this->get( 'sm.bucket' ),
+              'key_json' => $key_json
+            ) );
+          }
         }
 
         return $this->client;
@@ -1038,20 +1046,20 @@ namespace wpCloud\StatelessMedia {
         if(defined( 'WP_CLI' ) || !empty($this->settings->get('key_json')) || isset($_POST['checked']) && count($_POST['checked']) > 1){
           return;
         }
-        
-        if( 
-          empty($this->settings->get('key_json')) && 
-          defined('WP_STATELESS_MEDIA_HIDE_SETUP_ASSISTANT') && WP_STATELESS_MEDIA_HIDE_SETUP_ASSISTANT == true && 
-          defined('WP_STATELESS_MEDIA_HIDE_SETTINGS_PANEL') && WP_STATELESS_MEDIA_HIDE_SETTINGS_PANEL == true 
+
+        if(
+          empty($this->settings->get('key_json')) &&
+          defined('WP_STATELESS_MEDIA_HIDE_SETUP_ASSISTANT') && WP_STATELESS_MEDIA_HIDE_SETUP_ASSISTANT == true &&
+          defined('WP_STATELESS_MEDIA_HIDE_SETTINGS_PANEL') && WP_STATELESS_MEDIA_HIDE_SETTINGS_PANEL == true
         ) {
           return;
         }
-        
+
         if( empty($this->settings->get('key_json')) && defined('WP_STATELESS_MEDIA_HIDE_SETUP_ASSISTANT') && WP_STATELESS_MEDIA_HIDE_SETUP_ASSISTANT == true ) {
           $url = $this->get_settings_page_url('?page=stateless-settings');
           exit( wp_redirect($url));
         }
-        
+
         if( $plugin == plugin_basename( $this->boot_file ) ) {
           $url = $this->get_settings_page_url('?page=stateless-setup&step=splash-screen');
           if(json_decode(get_site_option('sm_key_json'))){
@@ -1086,7 +1094,7 @@ namespace wpCloud\StatelessMedia {
 
       /**
        * Filter for attachment_url_to_postid()
-       * 
+       *
        * @param int|false $post_id originally found post ID (or false if not found)
        * @param string $url the URL to find the post ID for
        * @return int|false found post ID from cloud storage URL
